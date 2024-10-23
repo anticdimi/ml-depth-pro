@@ -88,7 +88,7 @@ def run(args):
             output_file = (
                 args.output_path
                 / image_path.relative_to(relative_path).parent
-                / image_path.stem
+                / f'{image_path.stem}_depth'
             )
             LOGGER.info(f"Saving depth map to: {str(output_file)}")
             output_file.parent.mkdir(parents=True, exist_ok=True)
