@@ -4,7 +4,6 @@
 Copyright (C) 2024 Apple Inc. All Rights Reserved.
 """
 
-
 import argparse
 import logging
 from pathlib import Path
@@ -22,11 +21,11 @@ LOGGER = logging.getLogger(__name__)
 
 def get_torch_device() -> torch.device:
     """Get the Torch device."""
-    device = torch.device("cpu")
+    device = torch.device('cpu')
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = torch.device('cuda:0')
     elif torch.backends.mps.is_available():
-        device = torch.device("mps")
+        device = torch.device('mps')
     return device
 
 
@@ -44,7 +43,7 @@ def run(args):
 
     image_paths = [args.image_path]
     if args.image_path.is_dir():
-        image_paths = args.image_path.glob("**/*")
+        image_paths = args.image_path.glob('**/*')
         relative_path = args.image_path
     else:
         relative_path = args.image_path.parent
@@ -58,7 +57,7 @@ def run(args):
     for image_path in tqdm(image_paths):
         # Load image and focal length from exif info (if found.).
         try:
-            LOGGER.info(f"Loading image {image_path} ...")
+            LOGGER.info(f'Loading image {image_path} ...')
             image, _, f_px = load_rgb(image_path)
         except Exception as e:
             LOGGER.error(str(e))
@@ -68,12 +67,12 @@ def run(args):
         prediction = model.infer(transform(image), f_px=f_px)
 
         # Extract the depth and focal length.
-        depth = prediction["depth"].detach().cpu().numpy().squeeze()
+        depth = prediction['depth'].detach().cpu().numpy().squeeze()
         if f_px is not None:
-            LOGGER.debug(f"Focal length (from exif): {f_px:0.2f}")
-        elif prediction["focallength_px"] is not None:
-            focallength_px = prediction["focallength_px"].detach().cpu().item()
-            LOGGER.info(f"Estimated focal length: {focallength_px}")
+            LOGGER.debug(f'Focal length (from exif): {f_px:0.2f}')
+        elif prediction['focallength_px'] is not None:
+            focallength_px = prediction['focallength_px'].detach().cpu().item()
+            LOGGER.info(f'Estimated focal length: {focallength_px}')
 
         inverse_depth = 1 / depth
         # Visualize inverse depth instead of depth, clipped to [0.1m;250m] range for better visualization.
@@ -90,29 +89,25 @@ def run(args):
                 / image_path.relative_to(relative_path).parent
                 / f'{image_path.stem}_depth'
             )
-            LOGGER.info(f"Saving depth map to: {str(output_file)}")
+            LOGGER.info(f'Saving depth map to: {str(output_file)}')
             output_file.parent.mkdir(parents=True, exist_ok=True)
-            np.savez_compressed(output_file, depth=depth)
+            np.savez_compressed(output_file, depth=depth, focal=prediction['focallength_px'])
 
             # Save as color-mapped "turbo" jpg image.
-            cmap = plt.get_cmap("turbo")
-            color_depth = (cmap(inverse_depth_normalized)[..., :3] * 255).astype(
-                np.uint8
-            )
-            color_map_output_file = str(output_file) + ".jpg"
-            LOGGER.info(f"Saving color-mapped depth to: : {color_map_output_file}")
-            PIL.Image.fromarray(color_depth).save(
-                color_map_output_file, format="JPEG", quality=90
-            )
+            cmap = plt.get_cmap('turbo')
+            color_depth = (cmap(inverse_depth_normalized)[..., :3] * 255).astype(np.uint8)
+            color_map_output_file = str(output_file) + '.jpg'
+            LOGGER.info(f'Saving color-mapped depth to: : {color_map_output_file}')
+            PIL.Image.fromarray(color_depth).save(color_map_output_file, format='JPEG', quality=90)
 
         # Display the image and estimated depth map.
         if not args.skip_display:
             ax_rgb.imshow(image)
-            ax_disp.imshow(inverse_depth_normalized, cmap="turbo")
+            ax_disp.imshow(inverse_depth_normalized, cmap='turbo')
             fig.canvas.draw()
             fig.canvas.flush_events()
 
-    LOGGER.info("Done predicting depth!")
+    LOGGER.info('Done predicting depth!')
     if not args.skip_display:
         plt.show(block=True)
 
@@ -120,35 +115,30 @@ def run(args):
 def main():
     """Run DepthPro inference example."""
     parser = argparse.ArgumentParser(
-        description="Inference scripts of DepthPro with PyTorch models."
+        description='Inference scripts of DepthPro with PyTorch models.'
     )
     parser.add_argument(
-        "-i", 
-        "--image-path", 
-        type=Path, 
-        default="./data/example.jpg",
-        help="Path to input image.",
-    )
-    parser.add_argument(
-        "-o",
-        "--output-path",
+        '-i',
+        '--image-path',
         type=Path,
-        help="Path to store output files.",
+        default='./data/example.jpg',
+        help='Path to input image.',
     )
     parser.add_argument(
-        "--skip-display",
-        action="store_true",
-        help="Skip matplotlib display.",
+        '-o',
+        '--output-path',
+        type=Path,
+        help='Path to store output files.',
     )
     parser.add_argument(
-        "-v", 
-        "--verbose", 
-        action="store_true", 
-        help="Show verbose output."
+        '--skip-display',
+        action='store_true',
+        help='Skip matplotlib display.',
     )
-    
+    parser.add_argument('-v', '--verbose', action='store_true', help='Show verbose output.')
+
     run(parser.parse_args())
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
