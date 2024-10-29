@@ -91,7 +91,12 @@ def run(args):
             )
             LOGGER.info(f'Saving depth map to: {str(output_file)}')
             output_file.parent.mkdir(parents=True, exist_ok=True)
-            np.savez_compressed(output_file, depth=depth, focal=prediction['focallength_px'])
+            np.savez_compressed(
+                output_file,
+                depth=depth,
+                focal_est=prediction['focallength_px'].detach().cpu().numpy(),
+                focal_exif=f_px,
+            )
 
             # Save as color-mapped "turbo" jpg image.
             cmap = plt.get_cmap('turbo')
