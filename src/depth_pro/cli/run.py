@@ -58,21 +58,18 @@ def run(args):
         # Load image and focal length from exif info (if found.).
         try:
             LOGGER.info(f'Loading image {image_path} ...')
-            image, _, f_px = load_rgb(image_path)
+            image, _, _ = load_rgb(image_path)
         except Exception as e:
             LOGGER.error(str(e))
             continue
         # Run prediction. If `f_px` is provided, it is used to estimate the final metric depth,
         # otherwise the model estimates `f_px` to compute the depth metricness.
-        prediction = model.infer(transform(image), f_px=f_px)
+        prediction = model.infer(transform(image), f_px=None)
 
         # Extract the depth and focal length.
         depth = prediction['depth'].detach().cpu().numpy().squeeze()
-        if f_px is not None:
-            LOGGER.debug(f'Focal length (from exif): {f_px:0.2f}')
-        elif prediction['focallength_px'] is not None:
-            focallength_px = prediction['focallength_px'].detach().cpu().item()
-            LOGGER.info(f'Estimated focal length: {focallength_px}')
+        focallength_px = prediction['focallength_px'].detach().cpu().item()
+        LOGGER.info(f'Estimated focal length: {focallength_px}')
 
         inverse_depth = 1 / depth
         # Visualize inverse depth instead of depth, clipped to [0.1m;250m] range for better visualization.
@@ -95,7 +92,6 @@ def run(args):
                 output_file,
                 depth=depth,
                 focal_est=prediction['focallength_px'].detach().cpu().numpy(),
-                focal_exif=f_px,
             )
 
             # Save as color-mapped "turbo" jpg image.
