@@ -28,6 +28,45 @@ def get_torch_device() -> torch.device:
         device = torch.device('mps')
     return device
 
+def run_single_image_with_fpx(input_path: Path, output_path: Path, f_px: float):
+    """Run Depth Pro on a single image."""
+    # Load model.
+    model, transform = create_model_and_transforms(
+        device=get_torch_device(),
+        precision=torch.half
+    )
+    model.eval()
+    image = load_rgb(input_path)[0]
+    f_px = torch.tensor(f_px, dtype=torch.float32, device='cuda')
+    print('f_px:', f_px)
+    prediction = model.infer(transform(image), f_px=f_px)
+
+    # Extract the depth and focal length.
+    depth = prediction['depth'].detach().cpu().numpy().squeeze()
+
+    inverse_depth = 1 / depth
+    # Visualize inverse depth instead of depth, clipped to [0.1m;250m] range for better visualization.
+    max_invdepth_vizu = min(inverse_depth.max(), 1 / 0.1)
+    min_invdepth_vizu = max(1 / 250, inverse_depth.min())
+    inverse_depth_normalized = (inverse_depth - min_invdepth_vizu) / (
+        max_invdepth_vizu - min_invdepth_vizu
+    )
+    
+    output_file = output_path / f'{input_path.stem}_depth'
+
+    cmap = plt.get_cmap('turbo')
+    color_depth = (cmap(inverse_depth_normalized)[..., :3] * 255).astype(np.uint8)
+    color_map_output_file = str(output_file) + '.jpg'
+    LOGGER.info(f'Saving color-mapped depth to: : {color_map_output_file}')
+    PIL.Image.fromarray(color_depth).save(color_map_output_file, format='JPEG', quality=90)
+
+    # Save Depth as npz file.
+    print(f'Saving depth map to: {str(output_file)}')
+    np.savez_compressed(
+        output_file,
+        depth=depth,
+        focal_est=prediction['focallength_px'].detach().cpu().numpy(),
+    )
 
 def run(args):
     """Run Depth Pro on a sample image."""
