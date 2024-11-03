@@ -37,18 +37,16 @@ class DepthProConfig:
 
 
 DEFAULT_MONODEPTH_CONFIG_DICT = DepthProConfig(
-    patch_encoder_preset="dinov2l16_384",
-    image_encoder_preset="dinov2l16_384",
-    checkpoint_uri="./checkpoints/depth_pro.pt",
+    patch_encoder_preset='dinov2l16_384',
+    image_encoder_preset='dinov2l16_384',
+    checkpoint_uri='./checkpoints/depth_pro.pt',
     decoder_features=256,
     use_fov_head=True,
-    fov_encoder_preset="dinov2l16_384",
+    fov_encoder_preset='dinov2l16_384',
 )
 
 
-def create_backbone_model(
-    preset: ViTPreset
-) -> Tuple[nn.Module, ViTPreset]:
+def create_backbone_model(preset: ViTPreset) -> Tuple[nn.Module, ViTPreset]:
     """Create and load a backbone model given a config.
 
     Args:
@@ -64,14 +62,14 @@ def create_backbone_model(
         config = VIT_CONFIG_DICT[preset]
         model = create_vit(preset=preset, use_pretrained=False)
     else:
-        raise KeyError(f"Preset {preset} not found.")
+        raise KeyError(f'Preset {preset} not found.')
 
     return model, config
 
 
 def create_model_and_transforms(
     config: DepthProConfig = DEFAULT_MONODEPTH_CONFIG_DICT,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device = torch.device('cpu'),
     precision: torch.dtype = torch.float32,
 ) -> Tuple[DepthPro, Compose]:
     """Create a DepthPro model and load weights from `config.checkpoint_uri`.
@@ -87,12 +85,8 @@ def create_model_and_transforms(
         The Torch DepthPro model and associated Transform.
 
     """
-    patch_encoder, patch_encoder_config = create_backbone_model(
-        preset=config.patch_encoder_preset
-    )
-    image_encoder, _ = create_backbone_model(
-        preset=config.image_encoder_preset
-    )
+    patch_encoder, patch_encoder_config = create_backbone_model(preset=config.patch_encoder_preset)
+    image_encoder, _ = create_backbone_model(preset=config.image_encoder_preset)
 
     fov_encoder = None
     if config.use_fov_head and config.fov_encoder_preset is not None:
@@ -132,21 +126,17 @@ def create_model_and_transforms(
     )
 
     if config.checkpoint_uri is not None:
-        state_dict = torch.load(config.checkpoint_uri, map_location="cpu")
-        missing_keys, unexpected_keys = model.load_state_dict(
-            state_dict=state_dict, strict=True
-        )
+        state_dict = torch.load(config.checkpoint_uri, map_location='cpu', weights_only=True)
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict=state_dict, strict=True)
 
         if len(unexpected_keys) != 0:
-            raise KeyError(
-                f"Found unexpected keys when loading monodepth: {unexpected_keys}"
-            )
+            raise KeyError(f'Found unexpected keys when loading monodepth: {unexpected_keys}')
 
         # fc_norm is only for the classification head,
         # which we would not use. We only use the encoding.
-        missing_keys = [key for key in missing_keys if "fc_norm" not in key]
+        missing_keys = [key for key in missing_keys if 'fc_norm' not in key]
         if len(missing_keys) != 0:
-            raise KeyError(f"Keys are missing when loading monodepth: {missing_keys}")
+            raise KeyError(f'Keys are missing when loading monodepth: {missing_keys}')
 
     return model, transform
 
@@ -177,12 +167,10 @@ class DepthPro(nn.Module):
 
         self.encoder = encoder
         self.decoder = decoder
-    
+
         dim_decoder = decoder.dim_decoder
         self.head = nn.Sequential(
-            nn.Conv2d(
-                dim_decoder, dim_decoder // 2, kernel_size=3, stride=1, padding=1
-            ),
+            nn.Conv2d(dim_decoder, dim_decoder // 2, kernel_size=3, stride=1, padding=1),
             nn.ConvTranspose2d(
                 in_channels=dim_decoder // 2,
                 out_channels=dim_decoder // 2,
@@ -235,7 +223,7 @@ class DepthPro(nn.Module):
         canonical_inverse_depth = self.head(features)
 
         fov_deg = None
-        if hasattr(self, "fov"):
+        if hasattr(self, 'fov'):
             fov_deg = self.fov.forward(x, features_0.detach())
 
         return canonical_inverse_depth, fov_deg
@@ -245,7 +233,7 @@ class DepthPro(nn.Module):
         self,
         x: torch.Tensor,
         f_px: Optional[Union[float, torch.Tensor]] = None,
-        interpolation_mode="bilinear",
+        interpolation_mode='bilinear',
     ) -> Mapping[str, torch.Tensor]:
         """Infer depth and fov for a given image.
 
@@ -258,7 +246,7 @@ class DepthPro(nn.Module):
         ----
             x (torch.Tensor): Input image
             f_px (torch.Tensor): Optional focal length in pixels corresponding to `x`.
-            interpolation_mode (str): Interpolation function for downsampling/upsampling. 
+            interpolation_mode (str): Interpolation function for downsampling/upsampling.
 
         Returns:
         -------
@@ -281,7 +269,7 @@ class DepthPro(nn.Module):
         canonical_inverse_depth, fov_deg = self.forward(x)
         if f_px is None:
             f_px = 0.5 * W / torch.tan(0.5 * torch.deg2rad(fov_deg.to(torch.float)))
-        
+
         inverse_depth = canonical_inverse_depth * (W / f_px)
         f_px = f_px.squeeze()
 
@@ -293,6 +281,7 @@ class DepthPro(nn.Module):
         depth = 1.0 / torch.clamp(inverse_depth, min=1e-4, max=1e4)
 
         return {
-            "depth": depth.squeeze(),
-            "focallength_px": f_px,
+            'depth': depth.squeeze(),
+            'focallength_px': f_px,
+            'fov_deg': fov_deg,
         }
